@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.png" alt="Logo" width="400" height="400">
+  <img src="logo.png" alt="Logo" width="150" height="150">
   <h3>Advanced Music Genre Classification System</h3>
 </div>
 
