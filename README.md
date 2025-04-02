@@ -35,6 +35,26 @@ This project implements a fruit image classification system using MobileNetV2, a
 ### Fruit Images Dataset
 
 This model is trained on the Fruit Images Dataset, which contains high-quality images of various fruits organized by categories.
+#### Create proper directory structure
+```bash
+mkdir -p data/fruits
+```
+
+#### Download the Fruits 360 dataset
+```bash
+curl -L -o data/fruits/fruits360.zip https://github.com/Horea94/Fruit-Images-Dataset/archive/refs/heads/master.zip
+```
+
+#### Unzip the dataset (this creates Fruit-Images-Dataset-master folder)
+```bash
+cd data/fruits
+unzip fruits360.zip
+```
+
+#### Check that directories exist
+```bash
+ls Fruit-Images-Dataset-master
+```
 
 **Dataset Details:**
 - 120+ fruit categories
