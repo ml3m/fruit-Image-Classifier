@@ -1,12 +1,14 @@
-# Fruit Image Classification with MobileNetV2
+<div align="center">
+  <img src="logo.png" alt="Logo" width="400" height="400">
+  <h3>Advanced Music Genre Classification System</h3>
+</div>
+
 
 A deep learning model for accurate classification of fruit images using MobileNetV2 architecture with TensorFlow.
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/)
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-2.8%2B-orange)](https://www.tensorflow.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-
-<img src="logo.png" alt="Logo" width="400" height="400">
 
 ## Table of Contents
 
