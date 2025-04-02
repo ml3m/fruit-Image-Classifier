@@ -6,7 +6,7 @@ A deep learning model for accurate classification of fruit images using MobileNe
 [![TensorFlow](https://img.shields.io/badge/TensorFlow-2.8%2B-orange)](https://www.tensorflow.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-![Sample Fruits](logo.png)
+<img src="logo.png" alt="Logo" width="400" height="400">
 
 ## Table of Contents
 
