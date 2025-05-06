@@ -7,9 +7,9 @@ from tensorflow.keras.preprocessing import image
 from tensorflow.keras.applications.resnet50 import preprocess_input
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QPushButton, 
                             QVBoxLayout, QHBoxLayout, QWidget, QFileDialog,
-                            QProgressBar, QFrame, QScrollArea, QGraphicsDropShadowEffect)
-from PyQt5.QtGui import QPixmap, QImage, QFont, QPainter, QColor
-from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
+                            QProgressBar, QFrame, QScrollArea)
+from PyQt5.QtGui import QPixmap, QImage, QFont, QDrag, QPainter, QColor
+from PyQt5.QtCore import Qt, QMimeData, QSize, QThread, pyqtSignal
 import io
 from PIL import Image, ImageQt
 
@@ -39,7 +39,7 @@ class PredictionThread(QThread):
 
 
 class DropArea(QLabel):
-    image_dropped = pyqtSignal(str)  # Signal to notify when an image is dropped
+    image_dropped = pyqtSignal(str)  # Add a signal
     
     def __init__(self, parent):
         super().__init__(parent)
@@ -49,10 +49,16 @@ class DropArea(QLabel):
         self.setStyleSheet("""
             QLabel {
                 border: 2px dashed #aaa;
-                border-radius: 15px;
+                border-radius: 10px;
                 background-color: #f8f8f8;
-                padding: 40px;
+                padding: 30px;
                 color: #666;
+            }
+            QMainWindow {
+                background-color: #f5f7fa;
+            }
+            QWidget {
+                font-family: Arial;
             }
         """)
         self.setAcceptDrops(True)
@@ -64,9 +70,9 @@ class DropArea(QLabel):
             self.setStyleSheet("""
                 QLabel {
                     border: 2px dashed #3498db;
-                    border-radius: 15px;
+                    border-radius: 10px;
                     background-color: #e8f6ff;
-                    padding: 40px;
+                    padding: 30px;
                     color: #3498db;
                 }
             """)
@@ -77,9 +83,9 @@ class DropArea(QLabel):
         self.setStyleSheet("""
             QLabel {
                 border: 2px dashed #aaa;
-                border-radius: 15px;
+                border-radius: 10px;
                 background-color: #f8f8f8;
-                padding: 40px;
+                padding: 30px;
                 color: #666;
             }
         """)
@@ -88,9 +94,9 @@ class DropArea(QLabel):
         self.setStyleSheet("""
             QLabel {
                 border: 2px dashed #aaa;
-                border-radius: 15px;
+                border-radius: 10px;
                 background-color: #f8f8f8;
-                padding: 40px;
+                padding: 30px;
                 color: #666;
             }
         """)
@@ -99,7 +105,7 @@ class DropArea(QLabel):
             for url in event.mimeData().urls():
                 file_path = url.toLocalFile()
                 if file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
-                    self.image_dropped.emit(file_path)  # Emit signal with file path
+                    self.image_dropped.emit(file_path)  # Emit signal instead of calling parent method
                     break
                     
     def mousePressEvent(self, event):
@@ -108,7 +114,7 @@ class DropArea(QLabel):
             self, 'Open Image', '', 'Image Files (*.png *.jpg *.jpeg)'
         )
         if file_path:
-            self.image_dropped.emit(file_path)  # Emit signal with file path
+            self.image_dropped.emit(file_path)  # Emit signal instead of calling parent method
 
 
 class ResultBar(QWidget):
@@ -128,9 +134,8 @@ class ResultBar(QWidget):
         name_frame.setStyleSheet("""
             QFrame {
                 background-color: #f0f0f0;
-                border-radius: 8px;
+                border-radius: 5px;
                 padding: 3px;
-                border: 1px solid #e0e0e0;
             }
         """)
         name_layout = QHBoxLayout(name_frame)
@@ -182,29 +187,25 @@ class ResultBar(QWidget):
             return "#f39c12"  # Orange for medium
         else:
             return "#95a5a6"  # Gray for low
+        
 
-
+############################################################
 class FruitClassifierApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Fruit Classifier")
-        self.setMinimumSize(900, 700)
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #f5f7fa;
-            }
-            QWidget {
-                font-family: Arial;
-            }
-            QPushButton {
-                height: 36px;
-                font-weight: bold;
-            }
-        """)
+        self.setMinimumSize(1600, 1000)
+        self.setStyleSheet("background-color: white;")
         
+        # Initialize properties
+        self.model = None
+        self.model_path = None
+        self.class_indices = {}
+        
+        # Load model and setup UI
         self.loadModel()
         self.initUI()
-        
+    
     def loadModel(self):
         # Load model (try both filenames)
         if os.path.exists('best_model.h5'):
@@ -212,48 +213,71 @@ class FruitClassifierApp(QMainWindow):
         elif os.path.exists('fruit_model.h5'):
             self.model_path = 'fruit_model.h5'
         else:
+            print("No model file found")
             self.model = None
             return
+        
+        print(f"Attempting to load model from {self.model_path}")
+        
+        # Try to enable mixed precision
+        try:
+            tf.keras.mixed_precision.set_global_policy('mixed_float16')
+            print("Mixed precision enabled")
+        except Exception as e:
+            print(f"Mixed precision not supported: {e}")
+        
+        # Method 1: Try with custom Cast layer
+        try:
+            from tensorflow.keras.utils import custom_object_scope
             
-        self.model = load_model(self.model_path)
+            # Define a simple cast function for custom objects
+            def cast_function(x, dtype):
+                return tf.cast(x, dtype)
+            
+            with custom_object_scope({'Cast': cast_function}):
+                self.model = load_model(self.model_path, compile=False)
+                
+            # Recompile the model
+            self.model.compile(optimizer='adam', 
+                             loss='categorical_crossentropy',
+                             metrics=['accuracy'])
+            
+            print("Model loaded successfully with method 1")
+            
+        except Exception as e:
+            print(f"Method 1 failed: {e}")
+            
+            # Method 2: Try simpler approach
+            try:
+                print("Trying alternative loading method...")
+                self.model = tf.keras.models.load_model(
+                    self.model_path,
+                    custom_objects={'Cast': lambda x, dtype: tf.cast(x, dtype)}
+                )
+                print("Model loaded successfully with method 2")
+                
+            except Exception as e2:
+                print(f"All loading methods failed. Error: {e2}")
+                self.model = None
+                return
         
         # Load class indices
-        self.class_indices = {}
         try:
             with open('class_indices.txt', 'r') as f:
                 for line in f:
                     fruit, idx = line.strip().split(': ')
                     self.class_indices[int(idx)] = fruit
+            print(f"Loaded {len(self.class_indices)} class labels")
         except Exception as e:
             print(f"Error loading class indices: {e}")
             self.class_indices = {}
-        
+    
     def initUI(self):
         # Main widget and layout
         main_widget = QWidget()
         main_layout = QVBoxLayout(main_widget)
         main_layout.setSpacing(20)
-        main_layout.setContentsMargins(30, 30, 30, 30)
-        
-        # Create a card-like container for the content
-        content_card = QFrame()
-        content_card.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 20px;
-                border: 1px solid #e0e0e0;
-            }
-        """)
-        card_layout = QVBoxLayout(content_card)
-        card_layout.setSpacing(20)
-        card_layout.setContentsMargins(25, 25, 25, 25)
-        
-        # Add shadow effect to the card
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(15)
-        shadow.setColor(QColor(0, 0, 0, 30))
-        shadow.setOffset(0, 5)
-        content_card.setGraphicsEffect(shadow)
+        main_layout.setContentsMargins(20, 20, 20, 20)
         
         # Header
         header = QLabel("🍓 Fruit Classifier 🥝")
@@ -266,53 +290,43 @@ class FruitClassifierApp(QMainWindow):
             background-color: #f8f9fa;
             border-radius: 10px;
         """)
-        card_layout.addWidget(header)
+        main_layout.addWidget(header)
         
         # Subtitle
         subtitle = QLabel("Drop or select an image to identify the fruit")
         subtitle.setFont(QFont("Arial", 12))
         subtitle.setAlignment(Qt.AlignCenter)
-        subtitle.setStyleSheet("color: #7f8c8d; margin-bottom: 10px;")
-        card_layout.addWidget(subtitle)
+        subtitle.setStyleSheet("color: #7f8c8d; margin-bottom: 20px;")
+        main_layout.addWidget(subtitle)
         
         # Content area
         content_layout = QHBoxLayout()
-        content_layout.setSpacing(30)
+        content_layout.setSpacing(20)
         
         # Left panel - Drop area and image display
         left_panel = QVBoxLayout()
         
         # Drop area for images
         self.drop_area = DropArea(self)
-        self.drop_area.image_dropped.connect(self.load_image)  # Connect signal to method
+        self.drop_area.image_dropped.connect(self.load_image)
         left_panel.addWidget(self.drop_area)
         
         # Image display (initially hidden)
-        self.image_frame = QFrame()
-        self.image_frame.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 15px;
-                border: 1px solid #e0e0e0;
-                padding: 10px;
-            }
-        """)
-        image_layout = QVBoxLayout(self.image_frame)
-        
         self.image_display = QLabel()
         self.image_display.setAlignment(Qt.AlignCenter)
         self.image_display.setMinimumSize(400, 300)
         self.image_display.setMaximumSize(400, 400)
         self.image_display.setStyleSheet("""
             QLabel {
-                border-radius: 10px;
+                border: 2px solid #dddddd;
+                border-radius: 15px;
+                padding: 5px;
+                background-color: white;
             }
         """)
         self.image_display.setScaledContents(True)
-        image_layout.addWidget(self.image_display)
-        
-        self.image_frame.hide()
-        left_panel.addWidget(self.image_frame)
+        self.image_display.hide()
+        left_panel.addWidget(self.image_display)
         
         # "Try Another" button (initially hidden)
         self.try_another_btn = QPushButton("Try Another Image")
@@ -321,9 +335,9 @@ class FruitClassifierApp(QMainWindow):
             QPushButton {
                 background-color: #3498db;
                 color: white;
-                border-radius: 8px;
-                padding: 12px;
-                margin-top: 15px;
+                border-radius: 5px;
+                padding: 10px;
+                margin-top: 10px;
             }
             QPushButton:hover {
                 background-color: #2980b9;
@@ -338,18 +352,6 @@ class FruitClassifierApp(QMainWindow):
         # Right panel - Results
         right_panel = QVBoxLayout()
         
-        # Results section in a card
-        self.results_card = QFrame()
-        self.results_card.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 15px;
-                border: 1px solid #e0e0e0;
-                padding: 15px;
-            }
-        """)
-        results_card_layout = QVBoxLayout(self.results_card)
-        
         # Results header
         self.results_header = QLabel("Results")
         self.results_header.setFont(QFont("Arial", 18, QFont.Bold))
@@ -361,20 +363,16 @@ class FruitClassifierApp(QMainWindow):
             border-radius: 8px;
             border-left: 5px solid #3498db;
         """)
-        results_card_layout.addWidget(self.results_header)
+        self.results_header.hide()
+        right_panel.addWidget(self.results_header)
         
         # Main prediction
         self.main_prediction = QLabel()
         self.main_prediction.setFont(QFont("Arial", 14))
         self.main_prediction.setStyleSheet("color: #27ae60; margin-bottom: 20px;")
         self.main_prediction.setWordWrap(True)
-        results_card_layout.addWidget(self.main_prediction)
-        
-        # Description label
-        self.description_label = QLabel("Here are the top matches from our fruit database:")
-        self.description_label.setFont(QFont("Arial", 11))
-        self.description_label.setStyleSheet("color: #555; margin-bottom: 10px;")
-        results_card_layout.addWidget(self.description_label)
+        self.main_prediction.hide()
+        right_panel.addWidget(self.main_prediction)
         
         # Results container with scroll area
         self.results_container = QFrame()
@@ -387,8 +385,8 @@ class FruitClassifierApp(QMainWindow):
             }
         """)
         self.results_layout = QVBoxLayout(self.results_container)
-        self.results_layout.setSpacing(10)
-        self.results_layout.setContentsMargins(5, 5, 5, 5)
+        self.results_layout.setSpacing(8)
+        self.results_layout.setContentsMargins(0, 0, 0, 0)
         
         # Scroll area for results
         self.results_scroll = QScrollArea()
@@ -396,30 +394,11 @@ class FruitClassifierApp(QMainWindow):
         self.results_scroll.setWidget(self.results_container)
         self.results_scroll.setFrameShape(QFrame.NoFrame)
         self.results_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.results_scroll.setMinimumWidth(400)
-        self.results_scroll.setStyleSheet("""
-            QScrollArea {
-                border: none;
-                background-color: transparent;
-            }
-            QScrollBar:vertical {
-                border: none;
-                background: #f0f0f0;
-                width: 10px;
-                border-radius: 5px;
-            }
-            QScrollBar::handle:vertical {
-                background: #c0c0c0;
-                border-radius: 5px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-        """)
-        results_card_layout.addWidget(self.results_scroll)
+        self.results_scroll.setMinimumWidth(350)
+        self.results_scroll.hide()
         
-        self.results_card.hide()
-        right_panel.addWidget(self.results_card)
+        right_panel.addWidget(self.results_scroll)
+        right_panel.addStretch()
         
         # Status message for no model
         if self.model is None:
@@ -431,20 +410,17 @@ class FruitClassifierApp(QMainWindow):
             right_panel.addWidget(self.status_label)
         
         content_layout.addLayout(right_panel)
-        card_layout.addLayout(content_layout)
+        main_layout.addLayout(content_layout)
         
         # Bottom credits
         credits = QLabel("Powered by TensorFlow and ResNet50")
         credits.setFont(QFont("Arial", 9))
         credits.setAlignment(Qt.AlignCenter)
-        credits.setStyleSheet("color: #95a5a6; margin-top: 10px;")
-        card_layout.addWidget(credits)
-        
-        # Add the card to the main layout
-        main_layout.addWidget(content_card)
+        credits.setStyleSheet("color: #95a5a6; margin-top: 20px;")
+        main_layout.addWidget(credits)
         
         self.setCentralWidget(main_widget)
-        
+    
     def load_image(self, file_path):
         if self.model is None:
             return
@@ -455,36 +431,16 @@ class FruitClassifierApp(QMainWindow):
         # Display the image
         pixmap = QPixmap(file_path)
         self.image_display.setPixmap(pixmap)
-        self.image_frame.show()
-        
-        # Add shadow effect to image
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(10)
-        shadow.setColor(QColor(0, 0, 0, 50))
-        shadow.setOffset(0, 3)
-        self.image_display.setGraphicsEffect(shadow)
+        self.image_display.show()
         
         # Show try again button
         self.try_another_btn.show()
         
-        # Show results card with loading state
-        self.results_card.show()
+        # Show loading message
         self.results_header.setText("Processing...")
+        self.results_header.show()
         self.main_prediction.setText("Analyzing image...")
-        self.main_prediction.setStyleSheet("color: #3498db; margin-bottom: 20px;")
-        self.description_label.setText("Please wait while we identify the fruit...")
-        
-        # Clear previous results
-        for i in reversed(range(self.results_layout.count())):
-            widget = self.results_layout.itemAt(i).widget()
-            if widget is not None:
-                widget.deleteLater()
-        
-        # Add a "Processing" indicator
-        processing_label = QLabel("Analyzing image... This may take a moment.")
-        processing_label.setAlignment(Qt.AlignCenter)
-        processing_label.setStyleSheet("color: #7f8c8d; padding: 20px;")
-        self.results_layout.addWidget(processing_label)
+        self.main_prediction.show()
         
         # Start prediction in a separate thread
         self.prediction_thread = PredictionThread(self.model, file_path)
@@ -527,9 +483,6 @@ class FruitClassifierApp(QMainWindow):
         self.main_prediction.setText(f"This appears to be a <b>{top_class}</b> with {confidence_text}.")
         self.main_prediction.setStyleSheet(f"color: {color}; margin-bottom: 20px;")
         
-        # Update description
-        self.description_label.setText("Here are the top matches from our fruit database:")
-        
         # Add bars for top 5 predictions
         for i, idx in enumerate(top_indices):
             class_name = self.class_indices.get(idx, f"Class {idx}")
@@ -538,22 +491,19 @@ class FruitClassifierApp(QMainWindow):
             # Create and add result bar
             result_bar = ResultBar(class_name, prob)
             self.results_layout.addWidget(result_bar)
-            
-            # Add separator except after last item
-            if i < len(top_indices) - 1:
-                separator = QFrame()
-                separator.setFrameShape(QFrame.HLine)
-                separator.setStyleSheet("background-color: #e0e0e0;")
-                separator.setMaximumHeight(1)
-                self.results_layout.addWidget(separator)
         
         # Add a stretch at the end
         self.results_layout.addStretch()
+        
+        # Show results
+        self.results_scroll.show()
     
     def reset_ui(self):
         # Hide image and results
-        self.image_frame.hide()
-        self.results_card.hide()
+        self.image_display.hide()
+        self.results_header.hide()
+        self.main_prediction.hide()
+        self.results_scroll.hide()
         self.try_another_btn.hide()
         
         # Show drop area
@@ -561,7 +511,6 @@ class FruitClassifierApp(QMainWindow):
         
         # Clear image
         self.image_display.clear()
-        self.image_display.setGraphicsEffect(None)
 
 
 if __name__ == "__main__":

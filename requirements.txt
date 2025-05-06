@@ -1,0 +1,6 @@
+numpy>=1.19.5
+tensorflow>=2.8.0
+Pillow>=8.4.0
+matplotlib>=3.4.3
+PyQt5>=5.15.4
+tk>=8.6
