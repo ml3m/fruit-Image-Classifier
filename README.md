@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.png" alt="Logo" width="150" height="150">
+  <img src="data_distribution_detailed.png" alt="Logo" width="150" height="150">
   <h3>Fruit Image Classification with MobileNetV2</h3>
 </div>
 
